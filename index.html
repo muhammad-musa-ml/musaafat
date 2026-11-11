@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>MusaaFat</title>
+<style>
+  :root { --navy:#141B41; --pink:#E8508F; --rasp:#B4245F; --sky1:#E6F6FC; --sky2:#C9E9F7; --sky3:#A9D8F0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { font-family: Georgia, 'Times New Roman', serif; color: var(--navy); background: radial-gradient(circle at 50% 30%, var(--sky1) 0%, var(--sky2) 55%, var(--sky3) 100%) fixed; }
+  #gate { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; text-align: center; }
+  #gate .eyebrow { font: 600 12px/1.2 system-ui, sans-serif; letter-spacing: .22em; text-transform: uppercase; color: #4C6A8A; }
+  #gate h1 { font-weight: 400; font-size: clamp(56px, 16vw, 112px); line-height: 1; margin: 14px 0 6px; letter-spacing: -.01em; }
+  #gate .sub { font-style: italic; color: var(--rasp); font-size: 17px; margin: 0 0 28px; }
+  #heart { width: 132px; height: 132px; margin: 4px 0 22px; }
+  form { display: flex; flex-direction: column; gap: 12px; width: min(320px, 100%); }
+  label { font: 600 12px/1.2 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #4C6A8A; text-align: left; }
+  input { font: 18px/1.2 system-ui, sans-serif; padding: 14px 16px; border-radius: 12px; border: 1.5px solid #9CC6DF; background: #fff; color: var(--navy); width: 100%; }
+  input:focus-visible, button:focus-visible { outline: 3px solid var(--pink); outline-offset: 2px; }
+  button { font: 600 17px/1 system-ui, sans-serif; padding: 15px 18px; border-radius: 12px; border: 0; background: var(--pink); color: #fff; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  #msg { min-height: 22px; font: 14px/1.4 system-ui, sans-serif; color: var(--rasp); margin: 0; }
+  .foot { margin-top: 30px; font: 600 11px/1.2 system-ui, sans-serif; letter-spacing: .2em; text-transform: uppercase; color: #4C6A8A; }
+  #mag { display: none; padding: 14px 10px 90px; }
+  #mag .pg { display: block; width: min(100%, 880px); margin: 0 auto 14px; background: #fff; border-radius: 6px; box-shadow: 0 6px 22px rgba(20,27,65,.18); overflow: hidden; }
+  #mag .pg img { display: block; width: 100%; height: auto; }
+  #mag .pg.wait { display: flex; align-items: center; justify-content: center; font: 13px system-ui, sans-serif; color: #7C8FA6; }
+  #music { display: none; position: fixed; right: 14px; bottom: 14px; z-index: 5; padding: 13px 16px; border-radius: 999px; background: var(--navy); box-shadow: 0 4px 14px rgba(20,27,65,.35); }
+  #count { display: none; position: fixed; left: 14px; bottom: 18px; z-index: 5; font: 600 12px/1 system-ui, sans-serif; letter-spacing: .1em; color: #fff; background: rgba(20,27,65,.72); padding: 8px 12px; border-radius: 999px; }
+</style>
+</head>
+<body>
+<main id="gate">
+  <div class="eyebrow">The anniversary issue</div>
+  <h1>MusaaFat</h1>
+  <p class="sub">a journey. also: Musa + Faati</p>
+  <svg id="heart" viewBox="0 0 13 12" aria-hidden="true"></svg>
+  <form id="f" autocomplete="off">
+    <label for="pw" id="hint">For Faati only. The password, please</label>
+    <input id="pw" type="password" inputmode="text" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    <button id="go" type="submit">Open</button>
+    <p id="msg" role="status" aria-live="polite"></p>
+  </form>
+  <div class="foot">From her banda</div>
+</main>
+<div id="mag" aria-label="The magazine"></div>
+<button id="music" type="button" aria-pressed="true">Music: on</button>
+<div id="count" aria-hidden="true"></div>
+<script>
+(function () {
+  // little pixel heart for the lock screen
+  var rows = ["0110001100", "1111011110", "1111111111", "1111111111", "0111111110", "0011111100", "0001111000", "0000110000"], h = "";
+  rows.forEach(function (r, y) { for (var x = 0; x < r.length; x++) if (r[x] === "1") h += '<rect x="' + (x + 1.5) + '" y="' + (y + 2) + '" width=".86" height=".86" rx=".16" fill="' + (y > 3 ? "#D23F7F" : (x + y) % 3 ? "#EE8DB4" : "#F6B0CB") + '"/>'; });
+  document.getElementById("heart").innerHTML = h;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var enc = new TextEncoder(), meta = null;
+  var SILENCE = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+  function b64(s) { var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  function deriveKey(pw) {
+    return crypto.subtle.importKey("raw", enc.encode(pw), "PBKDF2", false, ["deriveKey"]).then(function (km) {
+      return crypto.subtle.deriveKey({ name: "PBKDF2", salt: b64(meta.salt), iterations: meta.iters, hash: "SHA-256" }, km, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+    });
+  }
+  function dec(key, buf) { var b = new Uint8Array(buf); return crypto.subtle.decrypt({ name: "AES-GCM", iv: b.slice(0, 12) }, key, b.slice(12)); }
+  function getBin(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error("load " + r.status); return r.arrayBuffer(); }); }
+
+  var ready = fetch("meta.json", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (m) { meta = m; })
+    .catch(function () { $("msg").textContent = "Could not load the magazine. Check your connection and reload."; });
+
+  // ---------------------------------------------------------------- music
+  // One track per stretch of pages. Moving into another stretch crossfades over FADE seconds.
+  // Gain goes through Web Audio because iPhones ignore element.volume.
+  var AC = window.AudioContext || window.webkitAudioContext, ctx = null, tracks = [], want = 0, musicOn = true, FADE = 1.0, LEVEL = 0.85;
+  function unlockAudio() {           // must run inside the tap on Open
+    if (!meta || !meta.audio || tracks.length) return;
+    try { ctx = AC ? new AC() : null; if (ctx && ctx.resume) ctx.resume(); } catch (x) { ctx = null; }
+    meta.audio.forEach(function (t) {
+      var el = new Audio(); el.loop = true; el.preload = "auto"; el.muted = true; el.src = SILENCE;
+      try { var p = el.play(); if (p && p.catch) p.catch(function () {}); } catch (x) {}
+      var g = null;
+      if (ctx) { try { g = ctx.createGain(); g.gain.value = 0; ctx.createMediaElementSource(el).connect(g); g.connect(ctx.destination); } catch (x) { g = null; } }
+      tracks.push({ el: el, gain: g, from: t.from, file: t.file, mime: t.mime, ready: false, stop: 0, ramp: 0 });
+    });
+  }
+  function fade(t, v) {
+    if (t.gain) {
+      var now = ctx.currentTime, g = t.gain.gain;
+      g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(v, now + FADE);
+    } else {                         // no Web Audio: step the element volume instead
+      clearInterval(t.ramp);
+      var from = t.el.volume, n = 0, steps = Math.round(FADE * 20);
+      t.ramp = setInterval(function () { n++; t.el.volume = Math.max(0, Math.min(1, from + (v - from) * n / steps)); if (n >= steps) clearInterval(t.ramp); }, 50);
+    }
+  }
+  function mix() {
+    tracks.forEach(function (t, i) {
+      if (!t.ready) return;
+      clearTimeout(t.stop);
+      if (musicOn && i === want) {
+        if (t.el.paused) { var p = t.el.play(); if (p && p.catch) p.catch(function () {}); }
+        fade(t, LEVEL);
+      } else {
+        fade(t, 0);
+        t.stop = setTimeout(function () { t.el.pause(); }, FADE * 1000 + 200);
+      }
+    });
+    var btn = $("music"); btn.textContent = musicOn ? "Music: on" : "Music: off"; btn.setAttribute("aria-pressed", musicOn ? "true" : "false");
+  }
+  function trackFor(page) { var k = 0; tracks.forEach(function (t, i) { if (t.from <= page) k = i; }); return k; }
+  function loadMusic(key) {
+    if (!tracks.length) return;
+    var order = tracks.map(function (_, i) { return i; }).sort(function (a, b) { return (a === want ? -1 : 0) - (b === want ? -1 : 0); });
+    var chain = Promise.resolve();
+    order.forEach(function (i) {
+      chain = chain.then(function () {
+        var t = tracks[i];
+        return getBin(t.file).then(function (buf) { return dec(key, buf); }).then(function (plain) {
+          t.el.pause(); t.el.muted = false; if (!t.gain) t.el.volume = 0;
+          t.el.src = URL.createObjectURL(new Blob([plain], { type: t.mime }));
+          t.ready = true; $("music").style.display = "block"; mix();
+        }).catch(function () {});
+      });
+    });
+    $("music").addEventListener("click", function () { musicOn = !musicOn; if (ctx && ctx.state === "suspended") ctx.resume(); mix(); });
+  }
+  window.__musaafat = function () { return { want: want, on: musicOn, tracks: tracks.map(function (t) { return { from: t.from, ready: t.ready, paused: t.el.paused, gain: t.gain ? +t.gain.gain.value.toFixed(2) : +t.el.volume.toFixed(2) }; }) }; };
+
+  // ---------------------------------------------------------------- gate and pages
+  $("f").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var pw = $("pw").value.trim().toLowerCase();
+    if (!pw || !meta) return;
+    unlockAudio();
+    $("go").disabled = true; $("msg").textContent = "Opening...";
+    ready.then(function () { return deriveKey(pw); }).then(function (key) {
+      return dec(key, b64(meta.check).buffer).then(function () { return key; });
+    }).then(open, function () {
+      $("go").disabled = false; $("msg").textContent = "That is not it. Try again."; $("pw").select();
+    });
+  });
+
+  function open(key) {
+    $("gate").style.display = "none";
+    var mag = $("mag"); mag.style.display = "block"; window.scrollTo(0, 0);
+    var slots = [];
+    for (var i = 1; i <= meta.pages; i++) {
+      var d = document.createElement("div"); d.className = "pg wait"; d.style.aspectRatio = "1 / " + meta.ratio; d.textContent = "page " + i;
+      mag.appendChild(d); slots.push(d);
+    }
+    $("count").style.display = "block"; $("count").textContent = "1 / " + meta.pages;
+    // which page is in the middle of the screen decides the counter and the song
+    var tick = false, settle = 0;
+    function where() {
+      tick = false;
+      var mid = window.innerHeight / 2, best = 0, bd = 1e9;
+      slots.forEach(function (s, i) { var r = s.getBoundingClientRect(), dist = Math.abs((r.top + r.bottom) / 2 - mid); if (dist < bd) { bd = dist; best = i; } });
+      $("count").textContent = (best + 1) + " / " + meta.pages;
+      var k = trackFor(best + 1);
+      if (tracks.length && k !== want) { want = k; clearTimeout(settle); settle = setTimeout(mix, 350); }
+    }
+    window.addEventListener("scroll", function () { if (!tick) { tick = true; requestAnimationFrame(where); } }, { passive: true });
+    var chain = Promise.resolve();
+    slots.forEach(function (slot, idx) {
+      chain = chain.then(function () {
+        var n = ("0" + (idx + 1)).slice(-2);
+        return getBin("p/" + n + ".bin").then(function (buf) { return dec(key, buf); }).then(function (plain) {
+          var img = new Image(); img.alt = "MusaaFat, page " + (idx + 1); img.src = URL.createObjectURL(new Blob([plain], { type: "image/jpeg" }));
+          slot.textContent = ""; slot.classList.remove("wait"); slot.appendChild(img);
+        }).catch(function () { slot.textContent = "page " + (idx + 1) + " did not load. Reload to try again."; });
+      });
+    });
+    loadMusic(key);
+  }
+})();
+</script>
+</body>
+</html>
